@@ -1,5 +1,6 @@
 import click
 import fstd
+import json
 from pathlib import Path
 from .convert import convert as converter
 from importlib.metadata import version, PackageNotFoundError
@@ -29,7 +30,6 @@ def overwrite_confirm(ctx, file_path, yes):
 
 
 # ===================== Global options =====================
-
 @click.group(name="fstdtools", help="CLI tools for fstd dictionary to pack/unpack/list/info/convert.", context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("-V", "--version", is_flag=True, callback=print_version, expose_value=False, is_eager=True, help="print version info and exit")
 @click.option("--verbose", "-v", count=True, help="log level, -v simple log, -vv debug log")
@@ -96,18 +96,22 @@ def extract(ctx, source_file, output_path, key_path, yes):
 
 
 # ===================== Subcommands write =====================
-@cli.command(name="write", help="from txt/fstdx/mdx to fstdx, from directory/mdd to fstdd")
+@cli.command(name="write", help="Compile from txt/fstdx/mdx to fstdx, from directory/mdd to fstdd")
 @click.argument("source_file", type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True))
 @click.argument("output_file", type=click.Path(file_okay=True, dir_okay=False, writable=True), required=False)
-@click.option("-c", "--compress-level", type=click.IntRange(min=0, max=22), default=5, help="compression level 0(fast) ~ 22(max compress)")
-@click.option("--compress-dict-size", type=click.IntRange(min=1, max=130), default=100, help="compression dict size, only for fstdx, 1~130, default 100")
-@click.option("-b", "--block-size", type=click.IntRange(min=4, max=512), default=4, help="block size, default 4, unit KB")
-@click.option("-t", "--thread", type=int, default=0, help="concurrency thread count, default 0, auto detect cpu count")
-@click.option("--substyle/--no-substyle", default=False, help="enable substyle, only for mdx/mdd to fstdx/fstdd, default False")
+@click.option("-T", "--title", type=str, required=False, help="title text/file of the dictionary")
+@click.option("-D", "--description", type=str, required=False, help="description text/file of the dictionary")
+@click.option("-e", "--encoding", type=str, required=False, default="utf-8", help="encoding of the dictionary.", show_default=True)
+@click.option("-m", "--meta", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), required=False, help="meta file(json) of the dictionary")
+@click.option("-c", "--compress-level", type=click.IntRange(min=0, max=22), default=5, help="compression level 0(fast) ~ 22(max compress).", show_default=True)
+@click.option("--compress-dict-size", type=click.IntRange(min=1, max=130), default=100, help="compression dict size, only for fstdx, 1~130.", show_default=True)
+@click.option("-b", "--block-size", type=click.IntRange(min=4, max=512), default=4, help="block size, unit: KB.", show_default=True)
+@click.option("-t", "--thread", type=int, default=0, help="concurrency thread count, auto detect cpu count if 0.", show_default=True)
+@click.option("--substyle/--no-substyle", default=False, help="enable substyle, only for mdx/mdd to fstdx/fstdd.", show_default=True)
 @click.option("-y", "--yes", is_flag=True, help="overwrite output file, no confirm")
 @click.pass_context
 def convert_(
-    ctx, source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, yes
+    ctx, source_file, output_file, title, description, encoding, meta, compress_level, compress_dict_size, block_size, thread, substyle, yes
 ):
     verbose = ctx.obj["verbose"]
     src = Path(source_file)
@@ -122,6 +126,36 @@ def convert_(
             click.echo("Operation cancelled", err=True)
             ctx.exit(code=1)
 
+    if not meta:
+        meta = {}
+    else:
+        if not Path(meta).is_file():
+            click.echo(click.style(f"Meta file {meta} does not exist", fg="red"), err=True)
+            ctx.exit(code=1)
+        else:
+            try:
+                meta = json.load(open(meta, 'rt', encoding='utf-8'))
+            except json.JSONDecodeError:
+                click.echo(click.style(f"Meta file {meta} is not valid json", fg="red"), err=True)
+                ctx.exit(code=1)
+            except Exception as e:
+                click.echo(click.style(f"Meta file {meta} error: {e}", fg="red"), err=True)
+                ctx.exit(code=1)
+
+    if title:
+        if Path(title).is_file():
+            title = open(title, 'rt', encoding='utf-8').read().strip()
+        meta["Title"] = title
+
+    if description:
+        if Path(description).is_file():
+            description = open(description, 'rt', encoding='utf-8').read().strip()
+        meta["Description"] = description
+
+    if encoding:
+        encoding = encoding.upper()
+        meta["Encoding"] = encoding
+
     def show_verbose():
         if verbose >= 1:
             click.echo(click.style(f"Source file: {src}", fg="cyan"))
@@ -130,6 +164,7 @@ def convert_(
             click.echo(click.style(f"Compression dict size: {compress_dict_size}", fg="cyan"))
             click.echo(click.style(f"Block size: {block_size}", fg="cyan"))
             click.echo(click.style(f"Concurrency threads: {thread if thread > 0 else 'auto detect cpu count'}", fg="cyan"))
+            click.echo(click.style(f"Meta: {json.dumps(meta, ensure_ascii=False,indent=2) if meta else 'use default'}", fg="cyan"))
 
     if src.is_dir():
         if out and not out.suffix == ".fstdd":
@@ -140,7 +175,7 @@ def convert_(
             overwrite_confirm(ctx, output_file, yes)
         writer = fstd.FstddWriter()
         show_verbose()
-        writer.compile_fstdd(source_file, output_file, "{}", block_size, compress_level, thread, verbose >= 1)
+        writer.compile_fstdd(source_file, output_file, json.dumps(meta), block_size, compress_level, thread, verbose >= 1)
 
     elif src.suffix == ".mdx":
         if out and not out.suffix == ".fstdx":
@@ -172,7 +207,7 @@ def convert_(
             overwrite_confirm(ctx, output_file, yes)
         writer = fstd.FstdxWriter()
         show_verbose()
-        writer.compile_fstdx(source_file, output_file, "{}", block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
+        writer.compile_fstdx(source_file, output_file, json.dumps(meta), block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
 
     click.echo(click.style(f"{output_file} written successfully", fg="bright_green"))
     ctx.exit(code=0)
