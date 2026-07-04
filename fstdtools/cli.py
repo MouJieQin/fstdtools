@@ -2,7 +2,7 @@ import click
 import fstd
 import json
 from pathlib import Path
-from .convert import convert as converter
+from .convert import convert
 from importlib.metadata import version, PackageNotFoundError
 
 
@@ -29,7 +29,14 @@ def overwrite_confirm(ctx, file_path, yes):
             return False
 
 
+def print_search_result(ctx, res):
+    for item in res:
+        print(item)
+    ctx.exit(code=0)
+
 # ===================== Global options =====================
+
+
 @click.group(name="fstdtools", help="CLI tools for fstd dictionary to pack/unpack/list/info/convert.", context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("-V", "--version", is_flag=True, callback=print_version, expose_value=False, is_eager=True, help="print version info and exit")
 @click.option("--verbose", "-v", count=True, help="log level, -v simple log, -vv debug log")
@@ -45,13 +52,13 @@ def cli(ctx, verbose, log_level):
 
 # ===================== Subcommands extract =====================
 @cli.command(name="extract", help="extract raw data from fstdx/fstdd")
-@click.argument("source_file", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@click.argument("fstd_file", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
 @click.argument("output_path", type=click.Path(file_okay=True, dir_okay=True, writable=True), required=False)
 @click.option("-k", "--key-path", type=str, required=False, help="key path only for fstdd, e.g. 'folder1/folder2/file.png'")
 @click.option("-y", "--yes", is_flag=True, help="overwrite output file, no confirm")
 @click.pass_context
-def extract(ctx, source_file, output_path, key_path, yes):
-    src = Path(source_file)
+def extract(ctx, fstd_file, output_path, key_path, yes):
+    src = Path(fstd_file)
     out = Path(output_path) if output_path else None
 
     if out and out.exists() and not yes:
@@ -104,13 +111,13 @@ def extract(ctx, source_file, output_path, key_path, yes):
 @click.option("-e", "--encoding", type=str, required=False, default="utf-8", help="encoding of the dictionary.", show_default=True)
 @click.option("-m", "--meta", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), required=False, help="meta file(json) of the dictionary")
 @click.option("-c", "--compress-level", type=click.IntRange(min=0, max=22), default=5, help="compression level 0(fast) ~ 22(max compress).", show_default=True)
-@click.option("--compress-dict-size", type=click.IntRange(min=1, max=130), default=100, help="compression dict size, only for fstdx, 1~130.", show_default=True)
+@click.option("-d", "--compress-dict-size", type=click.IntRange(min=1, max=130), default=100, help="compression dict size, only for fstdx, 1~130.", show_default=True)
 @click.option("-b", "--block-size", type=click.IntRange(min=4, max=512), default=4, help="block size, unit: KB.", show_default=True)
 @click.option("-t", "--thread", type=int, default=0, help="concurrency thread count, auto detect cpu count if 0.", show_default=True)
 @click.option("--substyle/--no-substyle", default=False, help="enable substyle, only for mdx/mdd to fstdx/fstdd.", show_default=True)
 @click.option("-y", "--yes", is_flag=True, help="overwrite output file, no confirm")
 @click.pass_context
-def convert_(
+def write(
     ctx, source_file, output_file, title, description, encoding, meta, compress_level, compress_dict_size, block_size, thread, substyle, yes
 ):
     verbose = ctx.obj["verbose"]
@@ -185,7 +192,7 @@ def convert_(
             output_file = str(src.with_suffix(".fstdx"))
             overwrite_confirm(ctx, output_file, yes)
         show_verbose()
-        converter(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
+        convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
 
     elif src.suffix == ".mdd":
         if out and not out.suffix == ".fstdd":
@@ -195,7 +202,7 @@ def convert_(
             output_file = str(src.with_suffix(".fstdd"))
             overwrite_confirm(ctx, output_file, yes)
         show_verbose()
-        converter(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
+        convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
 
     else:
         # see src as txt or fstdx, then convert to fstdx
@@ -211,6 +218,108 @@ def convert_(
 
     click.echo(click.style(f"{output_file} written successfully", fg="bright_green"))
     ctx.exit(code=0)
+
+
+# ===================== Subcommands search =====================
+@cli.command(name="search", help="Search in fstdx/fstdd dictionary")
+@click.argument("fstd_file", type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True))
+@click.option("-m", "--meta", is_flag=True, required=False, help="show meta information")
+@click.option("-H", "--header", is_flag=True, required=False, help="show header information")
+@click.option("-u", "--enumerate", is_flag=True, required=False, help="enumerate all keys in dictionary")
+@click.option("-c", "--contains", type=str, required=False, help="check if key exists in dictionary")
+@click.option("-k", "--key", type=str, required=False, help="show the value of key. (exact match)")
+@click.option("-p", "--predictive", type=str, required=False, help="perform predictive search")
+@click.option("-r", "--regex", type=str, required=False, help="Run regex pattern search")
+@click.option("-s", "--spellcheck", type=str, required=False, help="Spell-check a word")
+@click.option("-g", "--suggest", type=str, required=False, help="Get word suggestions for")
+@click.option("-C", "--common-prefix", type=str, required=False, help="Search common prefix matches")
+@click.option("-l", "--longest-prefix", type=str, required=False, help="Find longest common prefix")
+@click.option("-e", "--edit-distance", type=int, required=False, help="Max edit distance for fuzzy search")
+@click.option("-P", "--prefix-distance", type=int, required=False, help="Max distance for prefix distance search")
+@click.option("-f", "--dictionary", multiple=True, type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), required=False, help="Add multiple .fstdx files for batch search")
+@click.option("-t", "--thread", type=int, default=0, help="concurrency thread count, auto detect cpu count if 0.", show_default=True)
+@click.pass_context
+def search(ctx, fstd_file, meta, header, contains, key, predictive,
+           enumerate, regex, spellcheck, suggest, common_prefix, longest_prefix, edit_distance, prefix_distance, dictionary, thread):
+    """
+    Search in fstdx/fstdd dictionary.
+    """
+    src = Path(fstd_file)
+    if (src.suffix == ".fstdd"):
+        reader = fstd.FstddReader(fstd_file)
+        if not reader.is_valid():
+            click.echo(click.style(f"Invalid fstdd file {fstd_file}", fg="red"), err=True)
+            ctx.exit(code=1)
+        if meta:
+            click.echo(click.style(f"{json.dumps(json.loads(reader.get_meta()), ensure_ascii=False,indent=2)}", fg="cyan"))
+            ctx.exit(code=0)
+        if header:
+            click.echo(click.style(f"{json.dumps(json.loads(reader.get_header()), ensure_ascii=False,indent=2)}", fg="cyan"))
+            ctx.exit(code=0)
+        if contains:
+            click.echo(click.style(f"{reader.contains(contains)}", fg="cyan"))
+            ctx.exit(code=0)
+        if enumerate:
+            all_keys = reader.extract_all_keys()
+            for key in all_keys:
+                print(key)
+            ctx.exit(code=0)
+        click.echo(click.style("Invalid option to search in fstdd file. Please use -m, -u, -c to search.", fg="red"), err=True)
+        ctx.exit(code=1)
+    elif (src.suffix == ".fstdx"):
+        reader = fstd.FstdxReader(fstd_file)
+        if not reader.is_valid():
+            click.echo(click.style(f"Invalid fstdx file {fstd_file}", fg="red"), err=True)
+            ctx.exit(code=1)
+        if meta:
+            click.echo(click.style(f"{json.dumps(json.loads(reader.get_meta()), ensure_ascii=False,indent=2)}", fg="cyan"))
+            ctx.exit(code=0)
+        if header:
+            click.echo(click.style(f"{json.dumps(json.loads(reader.get_header()), ensure_ascii=False,indent=2)}", fg="cyan"))
+            ctx.exit(code=0)
+        if contains:
+            click.echo(click.style(f"{reader.contains(contains)}", fg="cyan"))
+            ctx.exit(code=0)
+        if enumerate:
+            reader.enumerate_print()
+            ctx.exit(code=0)
+        if predictive:
+            print_search_result(ctx, reader.predictive_search(predictive))
+        if regex:
+            res = reader.regex_search(regex, thread)
+            if res[1]:
+                click.echo(click.style(f"Regex error: {res[1]}", fg="red"), err=True)
+                ctx.exit(code=1)
+            print_search_result(ctx, res[0])
+        if spellcheck:
+            print_search_result(ctx, reader.spellcheck_word(spellcheck))
+        if suggest:
+            print_search_result(ctx, reader.suggest(suggest))
+        if common_prefix:
+            print_search_result(ctx, reader.common_prefix(common_prefix))
+        if longest_prefix:
+            print(longest_prefix[0:reader.longest_prefix_len(longest_prefix)])
+            ctx.exit(code=0)
+        if edit_distance:
+            if not key:
+                click.echo(click.style("Please use -k to specify a key.", fg="red"), err=True)
+                ctx.exit(code=1)
+            print_search_result(ctx, reader.edit_distance_search(key, edit_distance))
+        if key:
+            res = reader.exact_match_search(key)
+            if res:
+                print_search_result(ctx, res)
+            else:
+                click.echo(click.style(f"Key {key} not found in dictionary.", fg="red"), err=True)
+                ctx.exit(code=1)
+        if prefix_distance:
+            click.echo(click.style("Prefix distance search not implemented to search in single fstdx. Use -f to search instead.", fg="red"), err=True)
+            ctx.exit(code=1)
+        click.echo(click.style("Invalid option to search in fstdx file. Please use -k, -e, -P, -g, -C, -l, -s, -i, -u, -c, -m, -t to search.", fg="red"), err=True)
+        ctx.exit(code=1)
+    else:
+        click.echo(click.style(f"Invalid file type {src.suffix}", fg="red"), err=True)
+        ctx.exit(code=1)
 
 
 if __name__ == "__main__":
