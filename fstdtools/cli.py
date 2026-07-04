@@ -34,9 +34,8 @@ def print_search_result(ctx, res):
         print(item)
     ctx.exit(code=0)
 
+
 # ===================== Global options =====================
-
-
 @click.group(name="fstdtools", help="CLI tools for fstd dictionary to pack/unpack/list/info/convert.", context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("-V", "--version", is_flag=True, callback=print_version, expose_value=False, is_eager=True, help="print version info and exit")
 @click.option("--verbose", "-v", count=True, help="log level, -v simple log, -vv debug log")
@@ -222,7 +221,7 @@ def write(
 
 # ===================== Subcommands search =====================
 @cli.command(name="search", help="Search in fstdx/fstdd dictionary")
-@click.argument("fstd_file", type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True))
+@click.argument("fstd_file", required=False, type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True))
 @click.option("-m", "--meta", is_flag=True, required=False, help="show meta information")
 @click.option("-H", "--header", is_flag=True, required=False, help="show header information")
 @click.option("-u", "--enumerate", is_flag=True, required=False, help="enumerate all keys in dictionary")
@@ -236,14 +235,74 @@ def write(
 @click.option("-l", "--longest-prefix", type=str, required=False, help="Find longest common prefix")
 @click.option("-e", "--edit-distance", type=int, required=False, help="Max edit distance for fuzzy search")
 @click.option("-P", "--prefix-distance", type=int, required=False, help="Max distance for prefix distance search")
+@click.option("-x", "--prior-suffix", type=str, multiple=True, required=False, help="Prior suffix only for prefix distance search")
 @click.option("-f", "--dictionary", multiple=True, type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), required=False, help="Add multiple .fstdx files for batch search")
 @click.option("-t", "--thread", type=int, default=0, help="concurrency thread count, auto detect cpu count if 0.", show_default=True)
 @click.pass_context
 def search(ctx, fstd_file, meta, header, contains, key, predictive,
-           enumerate, regex, spellcheck, suggest, common_prefix, longest_prefix, edit_distance, prefix_distance, dictionary, thread):
+           enumerate, regex, spellcheck, suggest, common_prefix, longest_prefix, edit_distance, prefix_distance, prior_suffix, dictionary, thread):
     """
     Search in fstdx/fstdd dictionary.
     """
+    if dictionary:
+        searcher = fstd.FstdxSearcher(thread)
+        if not searcher.is_valid():
+            click.echo(click.style("Invalid thread count. Please use -t to specify a valid thread count.", fg="red"), err=True)
+            ctx.exit(code=1)
+        for dict_file in dictionary:
+            if not searcher.insert(dict_file, dict_file):
+                click.echo(click.style(f"Insert fstdx file {dict_file} failed.", fg="red"), err=True)
+                ctx.exit(code=1)
+        if contains:
+            click.echo(click.style(f"{searcher.contains(contains, dictionary)}", fg="cyan"))
+            ctx.exit(code=0)
+        if predictive:
+            print_search_result(ctx, searcher.predictive_search(predictive, dictionary))
+        if regex:
+            res = searcher.regex_search(regex, dictionary, thread)
+            if res[1]:
+                click.echo(click.style(f"Regex error: {res[1]}", fg="red"), err=True)
+                ctx.exit(code=1)
+            print_search_result(ctx, res[0])
+        if spellcheck:
+            print_search_result(ctx, searcher.spellcheck_word(spellcheck, dictionary))
+        if suggest:
+            print_search_result(ctx, searcher.suggest(suggest, dictionary))
+        if common_prefix:
+            print_search_result(ctx, searcher.common_prefix_search(common_prefix, dictionary))
+        if longest_prefix:
+            print(longest_prefix[0:searcher.longest_common_prefix_search(longest_prefix, dictionary)])
+            ctx.exit(code=0)
+        if edit_distance:
+            if not key:
+                click.echo(click.style("Please use -k to specify a key.", fg="red"), err=True)
+                ctx.exit(code=1)
+            print_search_result(ctx, searcher.edit_distance_search(key, dictionary, edit_distance))
+        if prefix_distance:
+            if not key:
+                click.echo(click.style("Please use -k to specify a key.", fg="red"), err=True)
+                ctx.exit(code=1)
+            if prior_suffix:
+                searcher.insert_prior_suffix(prior_suffix)
+            print_search_result(ctx, searcher.prefix_distance_search(key, dictionary, prefix_distance))
+        if key:
+            res = searcher.exact_match_search(key, dictionary)
+            if not res:
+                click.echo(click.style(f"Key {key} not found in dictionaries.", fg="red"), err=True)
+                ctx.exit(code=1)
+            else:
+                for name, values in res.items():
+                    click.echo(click.style(f"# {name}:", fg="cyan"))
+                    click.echo(click.style("---", fg="cyan"))
+                    for value in values:
+                        print(value)
+                        click.echo(click.style("---", fg="cyan"))
+                ctx.exit(code=0)
+        click.echo(click.style("Invalid option to search in multiple fstdx files. Please use -k, -e, -P, -g, -C, -l, -s, -i, -u, -c, -m, -t, to search.", fg="red"), err=True)
+        ctx.exit(code=1)
+    if not fstd_file:
+        click.echo(click.style("Please specify a fstdx/fstdd file.", fg="red"), err=True)
+        ctx.exit(code=1)
     src = Path(fstd_file)
     if (src.suffix == ".fstdd"):
         reader = fstd.FstddReader(fstd_file)
@@ -296,7 +355,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
         if suggest:
             print_search_result(ctx, reader.suggest(suggest))
         if common_prefix:
-            print_search_result(ctx, reader.common_prefix(common_prefix))
+            print_search_result(ctx, reader.common_prefix_search(common_prefix))
         if longest_prefix:
             print(longest_prefix[0:reader.longest_prefix_len(longest_prefix)])
             ctx.exit(code=0)
