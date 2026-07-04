@@ -205,12 +205,18 @@ def write(
 
     else:
         # see src as txt or fstdx, then convert to fstdx
-        if out and not out.suffix == ".fstdx":
+        if out and out.suffix != ".fstdx":
             click.echo(click.style("For txt or fstdx source, output file must have .fstdx extension", fg="red"), err=True)
             ctx.exit(code=1)
         if not output_file:
-            output_file = str(src.with_suffix(".fstdx"))
+            if src.suffix == ".fstdx":
+                output_file = str(src.resolve()) + ".fstdx"
+            else:
+                output_file = str(src.with_suffix(".fstdx"))
             overwrite_confirm(ctx, output_file, yes)
+        if str(src.resolve()) == str(Path(output_file).resolve()):
+            click.echo(click.style("Output file is same as source file, no conversion", fg="red"), err=True)
+            ctx.exit(code=1)
         writer = fstd.FstdxWriter()
         show_verbose()
         writer.compile_fstdx(source_file, output_file, json.dumps(meta), block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
@@ -319,7 +325,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
             click.echo(click.style(f"{reader.contains(contains)}", fg="cyan"))
             ctx.exit(code=0)
         if enumerate:
-            all_keys = reader.extract_all_keys()
+            all_keys = reader.extract_all_key()
             for key in all_keys:
                 print(key)
             ctx.exit(code=0)
