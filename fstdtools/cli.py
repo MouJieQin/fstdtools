@@ -20,8 +20,8 @@ def print_version(ctx, param, value):
     ctx.exit()
 
 
-def overwrite_confirm(ctx, file_path):
-    if Path(file_path).exists():
+def overwrite_confirm(ctx, file_path, yes):
+    if not yes and Path(file_path).exists():
         if not click.confirm(click.style(f"File {file_path} already exists. Overwrite?", fg="yellow"), default=False):
             click.echo("Operation cancelled", err=True)
             ctx.exit(code=1)
@@ -43,8 +43,59 @@ def cli(ctx, verbose, log_level):
     fstd.set_log_level(log_level)
 
 
-# ===================== Subcommands write =====================
+# ===================== Subcommands extract =====================
+@cli.command(name="extract", help="extract raw data from fstdx/fstdd")
+@click.argument("source_file", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@click.argument("output_path", type=click.Path(file_okay=True, dir_okay=True, writable=True), required=False)
+@click.option("-k", "--key-path", type=str, required=False, help="key path only for fstdd, e.g. 'folder1/folder2/file.png'")
+@click.option("-y", "--yes", is_flag=True, help="overwrite output file, no confirm")
+@click.pass_context
+def extract(ctx, source_file, output_path, key_path, yes):
+    src = Path(source_file)
+    out = Path(output_path) if output_path else None
 
+    if out and out.exists() and not yes:
+        if not click.confirm(click.style(f"File {out} already exists, overwrite?", fg="yellow")):
+            click.echo("Operation cancelled", err=True)
+            ctx.exit(code=1)
+
+    if src.suffix == ".fstdx":
+        if not output_path:
+            output_path = str(src.with_suffix(".txt"))
+            overwrite_confirm(ctx, output_path, yes)
+        reader = fstd.FstdxReader(str(src.resolve()))
+        if not reader.is_valid():
+            click.echo(click.style(f"Invalid fstdx file {src}", fg="red"), err=True)
+            ctx.exit(code=1)
+        if reader.extract(output_path):
+            click.echo(click.style(f"{str(Path(output_path).resolve())} extracted successfully", fg="bright_green"))
+        else:
+            ctx.exit(code=1)
+    elif src.suffix == ".fstdd":
+        if not output_path:
+            output_path = str(src.parent / "data")
+            overwrite_confirm(ctx, output_path, yes)
+        reader = fstd.FstddReader(str(src.resolve()))
+        if not reader.is_valid():
+            click.echo(click.style(f"Invalid fstdd file {src}", fg="red"), err=True)
+            ctx.exit(code=1)
+        if key_path:
+            if reader.extract(key_path, output_path):
+                click.echo(click.style(f"{str(Path(output_path)/key_path)} extracted successfully", fg="bright_green"))
+            else:
+                ctx.exit(code=1)
+        else:
+            if reader.extract_all(output_path):
+                click.echo(click.style(f"{str(Path(output_path).resolve())} extracted successfully", fg="bright_green"))
+            else:
+                ctx.exit(code=1)
+    else:
+        click.echo(click.style(f"Invalid file type {src.suffix}", fg="red"), err=True)
+        ctx.exit(code=1)
+    ctx.exit(code=0)
+
+
+# ===================== Subcommands write =====================
 @cli.command(name="write", help="from txt/fstdx/mdx to fstdx, from directory/mdd to fstdd")
 @click.argument("source_file", type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True))
 @click.argument("output_file", type=click.Path(file_okay=True, dir_okay=False, writable=True), required=False)
@@ -86,7 +137,7 @@ def convert_(
             ctx.exit(code=1)
         if not output_file:
             output_file = str(src.with_suffix(".fstdd"))
-            overwrite_confirm(ctx, output_file)
+            overwrite_confirm(ctx, output_file, yes)
         writer = fstd.FstddWriter()
         show_verbose()
         writer.compile_fstdd(source_file, output_file, "{}", block_size, compress_level, thread, verbose >= 1)
@@ -96,8 +147,8 @@ def convert_(
             click.echo(click.style("For mdx source, output file must have .fstdx extension", fg="red"), err=True)
             ctx.exit(code=1)
         if not output_file:
-            output_file = src.with_suffix(".fstdx")
-            overwrite_confirm(ctx, output_file)
+            output_file = str(src.with_suffix(".fstdx"))
+            overwrite_confirm(ctx, output_file, yes)
         show_verbose()
         converter(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
 
@@ -107,7 +158,7 @@ def convert_(
             ctx.exit(code=1)
         if not output_file:
             output_file = str(src.with_suffix(".fstdd"))
-            overwrite_confirm(ctx, output_file)
+            overwrite_confirm(ctx, output_file, yes)
         show_verbose()
         converter(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
 
@@ -117,13 +168,14 @@ def convert_(
             click.echo(click.style("For txt or fstdx source, output file must have .fstdx extension", fg="red"), err=True)
             ctx.exit(code=1)
         if not output_file:
-            output_file = src.with_suffix(".fstdx")
-            overwrite_confirm(ctx, output_file)
+            output_file = str(src.with_suffix(".fstdx"))
+            overwrite_confirm(ctx, output_file, yes)
         writer = fstd.FstdxWriter()
         show_verbose()
         writer.compile_fstdx(source_file, output_file, "{}", block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
 
     click.echo(click.style(f"{output_file} written successfully", fg="bright_green"))
+    ctx.exit(code=0)
 
 
 if __name__ == "__main__":

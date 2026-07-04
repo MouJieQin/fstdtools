@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Macos
+.DS_Store
+
+# Test
+test/
+*.fstdx
+*.fstdd
+*.mdx
+*.mdd
