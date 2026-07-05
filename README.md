@@ -1,5 +1,5 @@
 # fstdtools
-A command line tool to pack/unpack/list/info [fstd](https://github.com/MouJieQin/fstd) dictionary and convert mdx/mdd to fstdx/fstdd.
+A command line tool to compile/search/list/info [fstd](https://github.com/MouJieQin/fstd) dictionary and convert mdx/mdd to fstdx/fstdd.
 
 ## Install
 

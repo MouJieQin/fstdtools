@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fstdtools"
 dynamic = ["version"]
 authors = [{ name = "Moujie Qin", email = "moujieqin@gmail.com" }]
-description = "CLI tools to pack/unpack/list/info fstd dictionary and convert mdx/mdd to fstdx/fstdd"
+description = "CLI tools to compile/search/list/info fstd dictionary and convert mdx/mdd to fstdx/fstdd"
 requires-python = ">=3.9"
 license-files = ["LICENSE"]
 dependencies = [
