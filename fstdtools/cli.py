@@ -265,19 +265,17 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
         if predictive:
             print_search_result(ctx, searcher.predictive_search(predictive, dictionary))
         if regex:
-            res = searcher.regex_search(regex, dictionary, thread)
+            res = searcher.regex_search(regex, dictionary)
             if res[1]:
                 click.echo(click.style(f"Regex error: {res[1]}", fg="red"), err=True)
                 ctx.exit(code=1)
             print_search_result(ctx, res[0])
-        if spellcheck:
-            print_search_result(ctx, searcher.spellcheck_word(spellcheck, dictionary))
         if suggest:
             print_search_result(ctx, searcher.suggest(suggest, dictionary))
         if common_prefix:
             print_search_result(ctx, searcher.common_prefix_search(common_prefix, dictionary))
         if longest_prefix:
-            print(longest_prefix[0:searcher.longest_common_prefix_search(longest_prefix, dictionary)])
+            print(longest_prefix[0:searcher.longest_prefix_len(longest_prefix, dictionary)])
             ctx.exit(code=0)
         if edit_distance:
             if not key:
@@ -304,7 +302,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
                         print(value)
                         click.echo(click.style("---", fg="cyan"))
                 ctx.exit(code=0)
-        click.echo(click.style("Invalid option to search in multiple fstdx files. Please use -k, -e, -P, -g, -C, -l, -s, -i, -u, -c, -m, -t, to search.", fg="red"), err=True)
+        click.echo(click.style("Invalid option to search in multiple fstdx files.", fg="red"), err=True)
         ctx.exit(code=1)
     if not fstd_file:
         click.echo(click.style("Please specify a fstdx/fstdd file.", fg="red"), err=True)
@@ -329,7 +327,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
             for key in all_keys:
                 print(key)
             ctx.exit(code=0)
-        click.echo(click.style("Invalid option to search in fstdd file. Please use -m, -u, -c to search.", fg="red"), err=True)
+        click.echo(click.style("Invalid option to search in fstdd file.", fg="red"), err=True)
         ctx.exit(code=1)
     elif (src.suffix == ".fstdx"):
         reader = fstd.FstdxReader(fstd_file)
@@ -357,7 +355,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
                 ctx.exit(code=1)
             print_search_result(ctx, res[0])
         if spellcheck:
-            print_search_result(ctx, reader.spellcheck_word(spellcheck))
+            print_search_result(ctx, reader.spellcheck_word(spellcheck, dictionary))
         if suggest:
             print_search_result(ctx, reader.suggest(suggest))
         if common_prefix:
@@ -380,7 +378,7 @@ def search(ctx, fstd_file, meta, header, contains, key, predictive,
         if prefix_distance:
             click.echo(click.style("Prefix distance search not implemented to search in single fstdx. Use -f to search instead.", fg="red"), err=True)
             ctx.exit(code=1)
-        click.echo(click.style("Invalid option to search in fstdx file. Please use -k, -e, -P, -g, -C, -l, -s, -i, -u, -c, -m, -t to search.", fg="red"), err=True)
+        click.echo(click.style("Invalid option to search in fstdx file.", fg="red"), err=True)
         ctx.exit(code=1)
     else:
         click.echo(click.style(f"Invalid file type {src.suffix}", fg="red"), err=True)
