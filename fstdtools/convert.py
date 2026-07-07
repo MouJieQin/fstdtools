@@ -67,7 +67,8 @@ def convert(source, target, compress_level, compress_dict_size, block_size, thre
             False
         )
         for key, value in mdd.items():
-            fname = key.decode('UTF-8').replace('\\', os.path.sep)
+            # fname = key.decode('UTF-8').replace('\\', os.path.sep)
+            fname = key.decode('UTF-8').replace('\\', '/')
             if not writer.push_file_stream(fname, value):
                 break
         ret = future.result()
