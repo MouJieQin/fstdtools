@@ -181,8 +181,9 @@ def write(
             overwrite_confirm(ctx, output_file, yes)
         writer = fstd.FstddWriter()
         show_verbose()
-        writer.compile_fstdd(source_file, output_file, json.dumps(meta), block_size, compress_level, thread, verbose >= 1)
-
+        ret = writer.compile_fstdd(source_file, output_file, json.dumps(meta), block_size, compress_level, thread, verbose >= 1)
+        if ret != 0:
+            ctx.exit(code=ret)
     elif src.suffix == ".mdx":
         if out and not out.suffix == ".fstdx":
             click.echo(click.style("For mdx source, output file must have .fstdx extension", fg="red"), err=True)
@@ -191,8 +192,9 @@ def write(
             output_file = str(src.with_suffix(".fstdx"))
             overwrite_confirm(ctx, output_file, yes)
         show_verbose()
-        convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
-
+        ret = convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
+        if ret != 0:
+            ctx.exit(code=ret)
     elif src.suffix == ".mdd":
         if out and not out.suffix == ".fstdd":
             click.echo(click.style("For mdd source, output file must have .fstdd extension", fg="red"), err=True)
@@ -201,8 +203,9 @@ def write(
             output_file = str(src.with_suffix(".fstdd"))
             overwrite_confirm(ctx, output_file, yes)
         show_verbose()
-        convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
-
+        ret = convert(source_file, output_file, compress_level, compress_dict_size, block_size, thread, substyle, None)
+        if ret != 0:
+            ctx.exit(code=ret)
     else:
         # see src as txt or fstdx, then convert to fstdx
         if out and out.suffix != ".fstdx":
@@ -219,8 +222,9 @@ def write(
             ctx.exit(code=1)
         writer = fstd.FstdxWriter()
         show_verbose()
-        writer.compile_fstdx(source_file, output_file, json.dumps(meta), block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
-
+        ret = writer.compile_fstdx(source_file, output_file, json.dumps(meta), block_size, compress_level, compress_dict_size, thread, False, verbose >= 1)
+        if ret != 0:
+            ctx.exit(code=ret)
     click.echo(click.style(f"{output_file} written successfully", fg="bright_green"))
     ctx.exit(code=0)
 

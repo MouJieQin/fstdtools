@@ -1,4 +1,3 @@
-import os.path
 import fstd
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -51,7 +50,7 @@ def convert(source, target, compress_level, compress_dict_size, block_size, thre
             bar.update(1)
         bar.close()
         writer = fstd.FstdxWriter()
-        writer.compile_fstdx(target, keys, values, meta_json_str, block_size, compress_level, compress_dict_size, thread, False, True)
+        return writer.compile_fstdx(target, keys, values, meta_json_str, block_size, compress_level, compress_dict_size, thread, False, True)
     elif source.endswith('.mdd'):
         mdd = MDD(source, passcode)
         writer = fstd.FstddWriter()
@@ -72,7 +71,6 @@ def convert(source, target, compress_level, compress_dict_size, block_size, thre
             if not writer.push_file_stream(fname, value):
                 break
         ret = future.result()
-        if ret != 0:
-            print("Compile fstdd failed with error code: %d" % ret)
+        return ret
     else:
         raise ValueError("Unsupported source file type: %s" % source)
